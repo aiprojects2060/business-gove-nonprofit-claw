@@ -31,6 +31,7 @@ const builtinSlashCommands = (() => {
     "model",
     "status",
     "queue",
+    "agent",
   ]);
 })();
 

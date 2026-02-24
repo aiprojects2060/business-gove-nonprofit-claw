@@ -222,6 +222,25 @@
         --openclaw-a2ui-status-top: calc(50% - 18px);
         --openclaw-a2ui-empty-top: 18px;
       }
+      /* ── Fix: agents detail panel layout (red bar / blank content) ── */
+      .agent-header,
+      .agent-tabs,
+      .agents-main {
+        height: auto !important;
+        max-height: none !important;
+        grid-template-rows: auto !important;
+      }
+      .agents-layout {
+        height: calc(100vh - 180px) !important;
+        display: grid !important;
+        grid-template-columns: 320px 1fr !important;
+        overflow: hidden !important;
+      }
+      .agents-sidebar,
+      .agents-main {
+        height: 100% !important;
+        overflow-y: auto !important;
+      }
     </style>
   </head>
   <body>

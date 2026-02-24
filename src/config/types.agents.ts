@@ -22,6 +22,8 @@ export type AgentConfig = {
   id: string;
   default?: boolean;
   name?: string;
+  /** Department/category for grouping in agent lists. */
+  department?: string;
   workspace?: string;
   agentDir?: string;
   model?: AgentModelConfig;
@@ -68,6 +70,16 @@ export type AgentConfig = {
 export type AgentsConfig = {
   defaults?: AgentDefaultsConfig;
   list?: AgentConfig[];
+  /** Metadata from corporate onboarding (org type, size, region, industry). */
+  corporate?: {
+    orgType?: "business" | "government" | "ngo";
+    size?: string;
+    region?: string;
+    industry?: string;
+    level?: string;
+    hierarchy?: string;
+    onboardedAt?: string;
+  };
 };
 
 export type AgentBinding = {

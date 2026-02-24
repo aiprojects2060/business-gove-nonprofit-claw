@@ -5,6 +5,7 @@ import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { shouldHandleTextCommands } from "../commands-registry.js";
 import { handleAllowlistCommand } from "./commands-allowlist.js";
+import { handleAgentCommand } from "./commands-agent.js";
 import { handleApproveCommand } from "./commands-approve.js";
 import { handleBashCommand } from "./commands-bash.js";
 import { handleCompactCommand } from "./commands-compact.js";
@@ -57,6 +58,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       handleContextCommand,
       handleExportSessionCommand,
       handleWhoamiCommand,
+      handleAgentCommand,
       handleSubagentsCommand,
       handleConfigCommand,
       handleDebugCommand,

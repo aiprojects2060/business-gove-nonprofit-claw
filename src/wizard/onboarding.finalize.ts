@@ -250,10 +250,15 @@ export async function finalizeOnboardingWizard(
     customBindHost: settings.customBindHost,
     basePath: controlUiBasePath,
   });
+  
+  // Check if corporate multi-agent mode was activated by detecting multiple agents
+  const hasMultipleAgents = (nextConfig.agents?.list?.length ?? 0) > 1;
+  const webUiBaseUrl = hasMultipleAgents ? `${links.httpUrl}/corporate` : links.httpUrl;
+
   const authedUrl =
     settings.authMode === "token" && settings.gatewayToken
-      ? `${links.httpUrl}#token=${encodeURIComponent(settings.gatewayToken)}`
-      : links.httpUrl;
+      ? `${webUiBaseUrl}#token=${encodeURIComponent(settings.gatewayToken)}`
+      : webUiBaseUrl;
   const gatewayProbe = await probeGatewayReachable({
     url: links.wsUrl,
     token: settings.authMode === "token" ? settings.gatewayToken : undefined,
@@ -273,9 +278,9 @@ export async function finalizeOnboardingWizard(
 
   await prompter.note(
     [
-      `Web UI: ${links.httpUrl}`,
+      hasMultipleAgents ? `Corporate Mission Control URL: ${webUiBaseUrl}` : `Web UI: ${links.httpUrl}`,
       settings.authMode === "token" && settings.gatewayToken
-        ? `Web UI (with token): ${authedUrl}`
+        ? (hasMultipleAgents ? `Corporate Mission Control (with token): ${authedUrl}` : `Web UI (with token): ${authedUrl}`)
         : undefined,
       `Gateway WS: ${links.wsUrl}`,
       gatewayStatusLine,
@@ -283,7 +288,7 @@ export async function finalizeOnboardingWizard(
     ]
       .filter(Boolean)
       .join("\n"),
-    "Control UI",
+    hasMultipleAgents ? "Multi-Agent Dashboard" : "Control UI",
   );
 
   let controlUiOpened = false;
@@ -318,15 +323,25 @@ export async function finalizeOnboardingWizard(
       "Token",
     );
 
-    hatchChoice = await prompter.select({
-      message: "How do you want to hatch your bot?",
-      options: [
-        { value: "tui", label: "Hatch in TUI (recommended)" },
-        { value: "web", label: "Open the Web UI" },
-        { value: "later", label: "Do this later" },
-      ],
-      initialValue: "tui",
-    });
+    let hatchOptions = [
+      { value: "tui", label: "Hatch in TUI (recommended)" },
+      { value: "web", label: "Open the Web UI" },
+      { value: "later", label: "Do this later" },
+    ];
+
+    if (hasMultipleAgents) {
+       hatchOptions = [
+         { value: "web", label: "Launch Corporate Mission Control Dashboard (Recommended for 2400+ Agents)" },
+         { value: "tui", label: "Hatch Orchestrator in Original TUI" },
+         { value: "later", label: "Do this later" },
+       ];
+    }
+
+    hatchChoice = (await prompter.select({
+      message: hasMultipleAgents ? "How do you want to manage your Agent Fleet?" : "How do you want to hatch your bot?",
+      options: hatchOptions,
+      initialValue: hasMultipleAgents ? "web" : "tui",
+    })) as "tui" | "web" | "later";
 
     if (hatchChoice === "tui") {
       restoreTerminalState("pre-onboarding tui", { resumeStdinIfPaused: true });

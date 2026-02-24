@@ -125,7 +125,20 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
     const evt = payload as ChatEvent;
     syncSessionKey();
+
+    // ── Cross-agent activity notification (B5) ──
+    // If the event is for a different session, show a brief notification
+    // so the operator can monitor fleet activity without switching.
     if (evt.sessionKey !== state.currentSessionKey) {
+      if (evt.state === "final" || evt.state === "error" || evt.state === "aborted") {
+        const agentHint = evt.sessionKey.split("/")[0] ?? evt.sessionKey;
+        const label =
+          evt.state === "final" ? "completed"
+          : evt.state === "error" ? `error: ${evt.errorMessage ?? "unknown"}`
+          : "aborted";
+        chatLog.addSystem(`[${agentHint} ▸ ${label}]`);
+        tui.requestRender();
+      }
       return;
     }
     if (finalizedRuns.has(evt.runId)) {

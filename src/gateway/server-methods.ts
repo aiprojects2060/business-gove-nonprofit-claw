@@ -20,6 +20,7 @@ import { systemHandlers } from "./server-methods/system.js";
 import { talkHandlers } from "./server-methods/talk.js";
 import { ttsHandlers } from "./server-methods/tts.js";
 import type { GatewayRequestHandlers, GatewayRequestOptions } from "./server-methods/types.js";
+import { tasksHandlers } from "./server-methods/tasks.js";
 import { updateHandlers } from "./server-methods/update.js";
 import { usageHandlers } from "./server-methods/usage.js";
 import { voicewakeHandlers } from "./server-methods/voicewake.js";
@@ -78,6 +79,7 @@ const READ_METHODS = new Set([
   "chat.history",
   "config.get",
   "talk.config",
+  "tasks.list",
 ]);
 const WRITE_METHODS = new Set([
   "send",
@@ -94,6 +96,9 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "tasks.create",
+  "tasks.update",
+  "tasks.delete",
 ]);
 
 function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["client"]) {
@@ -139,6 +144,9 @@ function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["c
     return null;
   }
   if (WRITE_METHODS.has(method)) {
+    return null;
+  }
+  if (method.startsWith("tasks.")) {
     return null;
   }
   if (ADMIN_METHOD_PREFIXES.some((prefix) => method.startsWith(prefix))) {
@@ -194,6 +202,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...agentHandlers,
   ...agentsHandlers,
   ...browserHandlers,
+  ...tasksHandlers,
 };
 
 export async function handleGatewayRequest(

@@ -7,6 +7,18 @@ export const AgentsSchema = z
   .object({
     defaults: z.lazy(() => AgentDefaultsSchema).optional(),
     list: z.array(AgentEntrySchema).optional(),
+    corporate: z
+      .object({
+        orgType: z.union([z.literal("business"), z.literal("government"), z.literal("ngo")]).optional(),
+        size: z.string().optional(),
+        region: z.string().optional(),
+        industry: z.string().optional(),
+        level: z.string().optional(),
+        hierarchy: z.string().optional(),
+        onboardedAt: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional();

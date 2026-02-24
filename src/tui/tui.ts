@@ -429,10 +429,49 @@ export async function runTui(opts: TuiOptions) {
   const updateHeader = () => {
     const sessionLabel = formatSessionKey(currentSessionKey);
     const agentLabel = formatAgentLabel(currentAgentId);
+    const fleetCount = agents.length;
+
+    // Build corporate setup label if available
+    const corp = config.agents?.corporate;
+    let setupLabel = "";
+    if (corp) {
+      const orgLabels: Record<string, string> = {
+        business: "\u{1F3E2} Business",
+        government: "\u{1F3DB}\uFE0F Gov",
+        ngo: "\u{1F30D} NGO",
+      };
+      const sizeLabels: Record<string, string> = {
+        micro: "Micro",
+        small: "Small",
+        medium: "Medium",
+        large: "Large",
+        enterprise: "Enterprise",
+      };
+      const levelLabels: Record<string, string> = {
+        federal: "Federal",
+        state: "State",
+        local: "Local",
+        national: "National",
+        devolved: "Devolved",
+      };
+      const parts: string[] = [];
+      // Build org label with region and level detail
+      let orgPart = orgLabels[corp.orgType ?? ""] ?? corp.orgType ?? "";
+      if (corp.region) orgPart += ` ${corp.region}`;
+      if (corp.level) orgPart += ` ${levelLabels[corp.level] ?? corp.level}`;
+      if (orgPart) parts.push(orgPart);
+      if (corp.size) parts.push(sizeLabels[corp.size] ?? corp.size);
+      if (corp.industry && corp.industry !== "government" && corp.industry !== "general") {
+        parts.push(corp.industry);
+      }
+      if (parts.length > 0) setupLabel = ` ▸ ${parts.join(" · ")}`;
+    }
+
+    const headerText = fleetCount > 0
+      ? `⚡ FLEET [${fleetCount} agents]${setupLabel} ▸ agent ${agentLabel} ▸ session ${sessionLabel}`
+      : `openclaw tui${setupLabel} ▸ agent ${agentLabel} ▸ session ${sessionLabel}`;
     header.setText(
-      theme.header(
-        `openclaw tui - ${client.connection.url} - agent ${agentLabel} - session ${sessionLabel}`,
-      ),
+      theme.header(headerText),
     );
   };
 

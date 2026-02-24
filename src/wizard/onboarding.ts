@@ -396,6 +396,21 @@ export async function runOnboardingWizard(
 
   await warnIfModelConfigLooksOff(nextConfig, prompter);
 
+  // ─── Corporate Multi-Agent Setup (optional) ───────────────────────
+  // Run this BEFORE gateway/channels so we know if we need a complex setup
+  {
+    const { runCorporateOnboarding } = await import("../corporate/onboard-corporate.js");
+    const corporateResult = await runCorporateOnboarding({
+      config: nextConfig,
+      workspaceDir,
+      prompter,
+      runtime,
+    });
+    if (corporateResult.enabled) {
+      nextConfig = corporateResult.config;
+    }
+  }
+
   const { configureGatewayForOnboarding } = await import("./onboarding.gateway-config.js");
   const gateway = await configureGatewayForOnboarding({
     flow,
@@ -435,6 +450,8 @@ export async function runOnboardingWizard(
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
+
+
 
   if (opts.skipSkills) {
     await prompter.note("Skipping skills setup.", "Skills");

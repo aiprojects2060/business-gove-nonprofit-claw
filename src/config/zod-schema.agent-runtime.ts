@@ -614,6 +614,7 @@ export const AgentEntrySchema = z
       .optional(),
     sandbox: AgentSandboxSchema,
     tools: AgentToolsSchema,
+    department: z.string().optional(),
   })
   .strict();
 

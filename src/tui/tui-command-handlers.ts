@@ -7,7 +7,7 @@ import {
 } from "../auto-reply/thinking.js";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
-import { normalizeAgentId } from "../routing/session-key.js";
+import { buildAgentMainSessionKey, normalizeAgentId } from "../routing/session-key.js";
 import { helpText, parseCommand } from "./commands.js";
 import type { ChatLog } from "./components/chat-log.js";
 import {
@@ -122,11 +122,20 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       tui.requestRender();
       return;
     }
-    const items = state.agents.map((agent: AgentSummary) => ({
-      value: agent.id,
-      label: agent.name ? `${agent.id} (${agent.name})` : agent.id,
-      description: agent.id === state.agentDefaultId ? "default" : "",
-    }));
+    const items = state.agents.map((agent: AgentSummary) => {
+      const isCurrent = agent.id === state.currentAgentId;
+      const marker = isCurrent ? "▸ " : "  ";
+      const nameLabel = agent.name ? `${agent.id} (${agent.name})` : agent.id;
+      return {
+        value: agent.id,
+        label: `${marker}${nameLabel}`,
+        description: isCurrent
+          ? "● current"
+          : agent.id === state.agentDefaultId
+            ? "default"
+            : "",
+      };
+    });
     const selector = createSearchableSelectList(items, 9);
     selector.onSelect = (item) => {
       void (async () => {
@@ -455,6 +464,117 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         tui.stop();
         process.exit(0);
         break;
+
+      // ───────────────────────────────────────────────
+      // MULTI-AGENT FLEET COMMANDS
+      // ───────────────────────────────────────────────
+
+      case "fleet": {
+        await refreshAgents();
+        const agentList = state.agents;
+        if (agentList.length === 0) {
+          chatLog.addSystem("No agents found.");
+          break;
+        }
+
+        // Header
+        chatLog.addSystem(`⚡ FLEET OVERVIEW — ${agentList.length} agent(s)`);
+        chatLog.addSystem("─".repeat(60));
+
+        // Dynamic column: each agent gets a formatted line
+        for (const agent of agentList) {
+          const nameLabel = agent.name ? `${agent.id} (${agent.name})` : agent.id;
+          const isActive = agent.id === state.currentAgentId;
+          const marker = isActive ? "▸ " : "  ";
+          chatLog.addSystem(`${marker}${nameLabel}${isActive ? "  ◄ current" : ""}`);
+        }
+
+        chatLog.addSystem("─".repeat(60));
+        chatLog.addSystem(
+          `Current: ${state.currentAgentId} | Session: ${state.currentSessionKey}`,
+        );
+        break;
+      }
+
+      case "broadcast": {
+        if (!args) {
+          chatLog.addSystem("usage: /broadcast <message>");
+          break;
+        }
+        await refreshAgents();
+        const targets = state.agents;
+        if (targets.length === 0) {
+          chatLog.addSystem("No agents to broadcast to.");
+          break;
+        }
+        chatLog.addSystem(`Broadcasting to ${targets.length} agent(s)...`);
+
+        let successCount = 0;
+        let failCount = 0;
+        for (const agent of targets) {
+          try {
+            const runId = randomUUID();
+            noteLocalRunId(runId);
+            const agentSessionKey = buildAgentMainSessionKey({ agentId: agent.id });
+            await client.sendChat({
+              sessionKey: agentSessionKey,
+              message: args,
+              deliver: deliverDefault,
+              runId,
+            });
+            successCount++;
+          } catch {
+            failCount++;
+          }
+        }
+        chatLog.addSystem(
+          `Broadcast complete: ${successCount} sent, ${failCount} failed.`,
+        );
+        break;
+      }
+
+      case "task": {
+        if (!args) {
+          chatLog.addSystem("usage: /task <agent-id> <message>");
+          break;
+        }
+        const spaceIdx = args.indexOf(" ");
+        if (spaceIdx === -1) {
+          chatLog.addSystem("usage: /task <agent-id> <message>");
+          break;
+        }
+        const targetAgentId = normalizeAgentId(args.slice(0, spaceIdx));
+        const taskMessage = args.slice(spaceIdx + 1).trim();
+        if (!taskMessage) {
+          chatLog.addSystem("usage: /task <agent-id> <message>");
+          break;
+        }
+
+        // Check if agent exists
+        await refreshAgents();
+        const agentExists = state.agents.some((a) => a.id === targetAgentId);
+        if (!agentExists) {
+          chatLog.addSystem(`Agent "${targetAgentId}" not found. Use /fleet to see available agents.`);
+          break;
+        }
+
+        try {
+          const runId = randomUUID();
+          noteLocalRunId(runId);
+          const agentSessionKey = buildAgentMainSessionKey({ agentId: targetAgentId });
+          await client.sendChat({
+            sessionKey: agentSessionKey,
+            message: taskMessage,
+            deliver: deliverDefault,
+            runId,
+          });
+          chatLog.addSystem(`Task sent to ${targetAgentId}: "${taskMessage}"`);
+        } catch (err) {
+          chatLog.addSystem(`Task to ${targetAgentId} failed: ${String(err)}`);
+        }
+        break;
+      }
+
       default:
         await sendMessage(raw);
         break;

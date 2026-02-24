@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
@@ -166,10 +167,80 @@ function serveFile(res: ServerResponse, filePath: string) {
   res.end(fs.readFileSync(filePath));
 }
 
-function serveIndexHtml(res: ServerResponse, indexPath: string) {
+function serveIndexHtml(res: ServerResponse, indexPath: string, config?: OpenClawConfig) {
+  let html = fs.readFileSync(indexPath, "utf8");
+  const nonce = crypto.randomBytes(16).toString("base64");
+
+  // Override CSP to allow our nonced inline script
+  const baseCsp = buildControlUiCspHeader();
+  const cspWithNonce = baseCsp.replace(
+    "script-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+  );
+  res.setHeader("Content-Security-Policy", cspWithNonce);
+
+  // ── Inject CSS for top-bar setup pill + agent detail panel layout fixes ──
+  const cssInjection = `
+<style>
+/* Top-bar setup pill */
+#oc-setup-pill{display:flex;align-items:center;gap:8px;padding:4px 14px;border-radius:20px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:#4f46e5;white-space:nowrap;margin:0 auto}
+#oc-setup-pill .oc-sep{color:rgba(99,102,241,0.3)}
+header.topbar{display:flex!important;align-items:center!important;justify-content:space-between!important}
+/* Agent detail panel layout fixes */
+.agent-header,.agent-tabs,.agents-main{height:auto!important;max-height:none!important;grid-template-rows:auto!important}
+.agents-layout{height:calc(100vh - 180px)!important;display:grid!important;grid-template-columns:320px 1fr!important;overflow:hidden!important}
+.agents-sidebar,.agents-main{height:100%!important;overflow-y:auto!important}
+.agent-tabs{display:flex!important;flex-wrap:wrap!important;gap:6px!important;padding:8px 0!important;align-items:center!important}
+.agent-tab{height:auto!important;min-height:0!important;max-height:36px!important;border-radius:6px!important;padding:6px 14px!important;font-size:13px!important;line-height:1.4!important;display:inline-flex!important;align-items:center!important}
+</style>`;
+
+  // ── Inject corporate metadata + top-bar pill as nonced inline script ──
+  const corporate = config?.agents?.corporate;
+  // Count unique agent IDs
+  const uniqueIds = new Set((config?.agents?.list ?? []).map((a: { id?: string }) => a?.id).filter(Boolean));
+  const agentCount = uniqueIds.size;
+  const corpJson = corporate ? JSON.stringify(corporate) : "null";
+  const scriptInjection = `
+<script nonce="${nonce}">
+(function(){
+  var c=${corpJson},n=${agentCount};
+  if(!c)return;
+  var L={business:'\u{1F3E2} Business',government:'\u{1F3DB}\uFE0F Gov',ngo:'\u{1F30D} NGO'};
+  var S={micro:'Micro',small:'Small',medium:'Medium',large:'Large',enterprise:'Enterprise',multinational:'Multinational'};
+  var LV={federal:'Federal',state:'State',local:'Local',national:'National',devolved:'Devolved'};
+  var orgPart=L[c.orgType]||c.orgType||'';
+  if(c.region)orgPart+=' '+c.region;
+  if(c.level)orgPart+=' '+(LV[c.level]||c.level);
+  var sizeLabel=S[c.size]||c.size||'';
+  var indLabel=(c.industry&&c.industry!=='government'&&c.industry!=='general')?c.industry:'';
+  function go(){
+    if(document.getElementById('oc-setup-pill'))return;
+    var topbar=document.querySelector('header.topbar');
+    if(!topbar)return;
+    var statusEl=topbar.querySelector('.topbar-status');
+    if(!statusEl)return;
+    var pill=document.createElement('div');
+    pill.id='oc-setup-pill';
+    var parts=[];
+    if(orgPart)parts.push(orgPart);
+    if(sizeLabel)parts.push(sizeLabel);
+    if(indLabel)parts.push(indLabel);
+    if(n)parts.push(n+' agents');
+    pill.innerHTML=parts.join(' <span class="oc-sep">·</span> ');
+    topbar.insertBefore(pill,statusEl);
+    return;
+  }
+  var ob=new MutationObserver(function(){go();});
+  if(document.body)ob.observe(document.body,{childList:true,subtree:true});
+  else document.addEventListener('DOMContentLoaded',function(){ob.observe(document.body,{childList:true,subtree:true});});
+})();
+</script>`;
+
+  html = html.replace("</head>", `${cssInjection}${scriptInjection}\n</head>`);
+
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
-  res.end(fs.readFileSync(indexPath, "utf8"));
+  res.end(html);
 }
 
 function isSafeRelativePath(relPath: string) {
@@ -320,7 +391,7 @@ export function handleControlUiHttpRequest(
 
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     if (path.basename(filePath) === "index.html") {
-      serveIndexHtml(res, filePath);
+      serveIndexHtml(res, filePath, opts?.config);
       return true;
     }
     serveFile(res, filePath);
@@ -330,7 +401,7 @@ export function handleControlUiHttpRequest(
   // SPA fallback (client-side router): serve index.html for unknown paths.
   const indexPath = path.join(root, "index.html");
   if (fs.existsSync(indexPath)) {
-    serveIndexHtml(res, indexPath);
+    serveIndexHtml(res, indexPath, opts?.config);
     return true;
   }
 

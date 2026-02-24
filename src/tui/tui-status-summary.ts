@@ -84,5 +84,18 @@ export function formatStatusSummary(summary: GatewayStatusSummary) {
     lines.push(`Queued system events (${queued.length}): ${preview}`);
   }
 
+  // ── Fleet agents summary ──
+  const heartbeatList = summary.heartbeat?.agents ?? [];
+  if (heartbeatList.length > 0) {
+    lines.push("");
+    lines.push(`Fleet agents (${heartbeatList.length}):`);
+    for (const agent of heartbeatList) {
+      const agentId = agent.agentId ?? "unknown";
+      const status = agent.enabled !== false ? "active" : "disabled";
+      const interval = agent.every ?? "—";
+      lines.push(`  ${status === "active" ? "●" : "○"} ${agentId} | heartbeat: ${interval} | ${status}`);
+    }
+  }
+
   return lines;
 }
