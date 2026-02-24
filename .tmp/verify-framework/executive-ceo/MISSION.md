@@ -1,1 +1,0 @@
-To build a sustainable, market-leading organization through clear vision and relentless execution.
